@@ -60,7 +60,7 @@ namespace game
 
 		float x, y;
 	};
-	MENGINE_MAKE_COMPONENT_TYPE(POSITION)
+#define POSITION UINT32_C(0b00000001)
 
 	struct Velocity
 	{
@@ -70,14 +70,14 @@ namespace game
 
 		float x, y;
 	};
-	MENGINE_MAKE_COMPONENT_TYPE(VELOCITY)
+#define VELOCITY UINT32_C(0b00000010)
 
 	void moveSystem()
 	{
-		mengine::forEachComponent(POSITION | VELOCITY, [](mengine::Query* _qr)
+		mengine::forEachComponent(POSITION | VELOCITY, [](mengine::EntityHandle _handle)
 			{
-				Position* pos = (Position*)mengine::getQueryData(_qr, POSITION);
-				Velocity* vel = (Velocity*)mengine::getQueryData(_qr, VELOCITY);
+				Position* pos = (Position*)mengine::getComponentData(_handle, POSITION);
+				Velocity* vel = (Velocity*)mengine::getComponentData(_handle, VELOCITY);
 			});
 	}
 
@@ -115,7 +115,7 @@ namespace game
 			auto frag = mengine::createShader(mengine::compileShader(s_fragShaderCodeGLSL, mengine::ShaderType::Fragment),
 				"shaders/fs_cube.bin");
 
-			mengine::packAssets("data/assets.pak", false);
+			mengine::packAssets("data/assets.pak");
 
 			mengine::destroy(geom);
 			mengine::destroy(vert);
@@ -148,12 +148,13 @@ namespace game
 			mengine::imguiCreate();
 
 			// ECS
-			mengine::EntityHandle entity1 = mengine::createEntity(POSITION | VELOCITY);
-			mengine::addComponent(entity1, POSITION, mengine::createComponent(new Position(0.0f, 0.0f), sizeof(Position)));
-			mengine::addComponent(entity1, VELOCITY, mengine::createComponent(new Velocity(1.0f, 0.0f), sizeof(Position)));
+			mengine::EntityHandle entity1 = mengine::createEntity();
+			mengine::addComponent(entity1, POSITION, mengine::createComponent(new Position(0.111f, 0.111f), sizeof(Position)));
+			mengine::addComponent(entity1, VELOCITY, mengine::createComponent(new Velocity(1.0f, 1.0f), sizeof(Velocity)));
 
-			mengine::EntityHandle entity2 = mengine::createEntity(POSITION);
-			mengine::addComponent(entity2, POSITION, mengine::createComponent(new Position(0.0f, 1.0f), sizeof(Position)));
+			mengine::EntityHandle entity2 = mengine::createEntity();
+			mengine::addComponent(entity2, POSITION, mengine::createComponent(new Position(0.222f, 0.222f), sizeof(Position)));
+			//mengine::addComponent(entity2, VELOCITY, mengine::createComponent(new Velocity(2.0f, 2.0f), sizeof(Velocity)));
 
 			// Shutdown
 			//mengine::destroy(entity1);
