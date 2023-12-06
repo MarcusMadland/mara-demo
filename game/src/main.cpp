@@ -4,6 +4,7 @@
 #include <mrender/input.h>
 
 #include <mapp/os.h>
+#include <mapp/timer.h>
 
 #include <imgui/imgui.h>
 
@@ -75,27 +76,33 @@ namespace
 
 	// Components
 	MENGINE_DEFINE_COMPONENT(COMPONENT_MESH)
-	struct MeshComponent
+	struct MeshComponent : mengine::ComponentI
 	{
-		MeshComponent(mengine::GeometryAssetHandle _handle,
-			mengine::ShaderAssetHandle _vsah, mengine::ShaderAssetHandle _fsah)
-			: m_gah(_handle)
+		MeshComponent()
+			: m_gah(BGFX_INVALID_HANDLE)
+			, m_ph(BGFX_INVALID_HANDLE)
+		{}
+
+		virtual ~MeshComponent() override 
 		{
-			m_ph = bgfx::createProgram(_vsah, _fsah);
-		}
+			mengine::destroy(m_gah);
+			bgfx::destroy(m_ph);
+		};
 
 		mengine::GeometryAssetHandle m_gah;
 		bgfx::ProgramHandle m_ph;
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_TRANSFORM)
-	struct TransformComponent
+	struct TransformComponent : mengine::ComponentI
 	{
-		TransformComponent(const bx::Vec3& _pos, const bx::Vec3& _scale)
-			: m_position(_pos)
-			, m_rotation(0.0f, 0.0f, 0.0f)
-			, m_scale(_scale)
+		TransformComponent()
+			: m_position({0.0f, 0.0f, 0.0f})
+			, m_rotation({ 0.0f, 0.0f, 0.0f })
+			, m_scale({ 1.0f, 1.0f, 1.0f })
 		{}
+
+		virtual ~TransformComponent() override {};
 
 		bx::Vec3 m_position;
 		bx::Vec3 m_rotation;
@@ -103,7 +110,7 @@ namespace
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_CAMERA)
-	struct CameraComponent
+	struct CameraComponent : mengine::ComponentI
 	{
 		CameraComponent()
 			: m_position({ 0.0f, 2.0f, -5.0f })
@@ -118,6 +125,8 @@ namespace
 			, m_prevMouseY(0.0f)
 			, m_canRotate(false)
 		{}
+
+		virtual ~CameraComponent() override {};
 		
 		bx::Vec3 m_position;
 		bx::Vec3 m_direction;
@@ -131,6 +140,9 @@ namespace
 	// Systems
 	void render(float _dt)
 	{
+		bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030FF, 1.0f, 0);
+		bgfx::touch(0);
+
 		mengine::EntityQuery* qr = mengine::queryEntities(COMPONENT_MESH | COMPONENT_TRANSFORM);
 		for (U32 i = 0; i < qr->m_count; i++)
 		{
@@ -163,7 +175,7 @@ namespace
 
 			bgfx::submit(0, mesh->m_ph);
 		}
-		bx::free(mengine::getAllocator(), qr);
+		bx::free(mrender::getAllocator(), qr);
 	}
 
 	void camera(float _dt)
@@ -177,7 +189,7 @@ namespace
 			const mrender::MouseState* mouseState = mengine::getMouseState();
 
 			camera->m_canRotate = !!mouseState->m_buttons[mrender::MouseButton::Left];
-			if (camera->m_canRotate)
+			if (camera->m_canRotate && !ImGui::GetIO().WantCaptureMouse)
 			{
 				if (s_reset)
 				{
@@ -256,13 +268,11 @@ namespace
 
 			bgfx::setViewTransform(0, view, proj);
 		};
-		bx::free(mengine::getAllocator(), qr);
+		bx::free(mrender::getAllocator(), qr);
 	}
 
 	void debugRender(float _dt)
 	{
-		mengine::imguiBeginFrame();
-
 		constexpr U32 x = 40;
 		constexpr U32 offset = 14;
 		constexpr U8 color = 0xA;
@@ -326,16 +336,79 @@ namespace
 		bgfx::dbgTextPrintf(bgfxStats->textWidth - (x - offset), 6, texLimit < texture ? 0x4 : color,	"%.2f / %.0f MiB", texture, texLimit);
 
 		ImGui::Begin("Development");
+
+		if (ImGui::CollapsingHeader("Entity Test", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			static mengine::EntityHandle s_cube;
+			static mengine::ShaderAssetHandle s_vsah;
+			static mengine::ShaderAssetHandle s_fsah;
+
+			if (ImGui::Button("Load Asset Pack"))
+			{
+				mengine::loadAssetPack("data/assets.pak");
+			}
+
+			if (ImGui::Button("Unload Asset Pack"))
+			{
+				mengine::unloadAssetPack("data/assets.pak");
+			}
+
+			if (ImGui::Button("Create Cube"))
+			{
+				s_vsah = mengine::loadShader("shaders/vs_cube.bin");
+				s_fsah = mengine::loadShader("shaders/fs_cube.bin");
+
+				MeshComponent* meshComp = new MeshComponent();
+				meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
+				meshComp->m_ph = bgfx::createProgram(s_vsah, s_fsah);
+
+				s_cube = mengine::createEntity();
+				mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
+				mengine::addComponent(s_cube, COMPONENT_TRANSFORM, mengine::createComponent(new TransformComponent()));
+			}
+			if (ImGui::Button("Destroy Cube"))
+			{
+				mengine::destroy(s_cube);
+
+				mengine::destroy(s_vsah);
+				mengine::destroy(s_fsah);
+			}
+		}
+
 		if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text("Num Entity Instances: %u", stats->numEntities);
 			ImGui::Text("Num Component Instances: %u", stats->numComponents);
 			ImGui::Text("Num Geometry Assets: %u", stats->numGeometryAssets);
 			ImGui::Text("Num Shader Assets: %u", stats->numShaderAssets);
-		}
-		ImGui::End();
 
-		mengine::imguiEndFrame();
+			ImGui::Separator();
+			for (U16 i = 0; i < stats->numEntities; i++)
+			{
+				ImGui::Text("Entity[%u] ref: %u", i, stats->entitiesRef[i]);
+			}
+			ImGui::Separator();
+
+			for (U16 i = 0; i < stats->numComponents; i++)
+			{
+				ImGui::Text("Components[%u] ref: %u", i, stats->componentsRef[i]);
+			}
+			ImGui::Separator();
+
+			for (U16 i = 0; i < stats->numGeometryAssets; i++)
+			{
+				ImGui::Text("GeometryAsset[%u] ref: %u", i, stats->geometryRef[i]);
+			}
+			ImGui::Separator();
+
+			for (U16 i = 0; i < stats->numShaderAssets; i++)
+			{
+				ImGui::Text("ShaderAsset[%u] ref: %u", i, stats->shaderRef[i]);
+			}
+			ImGui::Separator();
+		}
+		
+		ImGui::End();
 	}
 
 	// Game
@@ -346,72 +419,40 @@ namespace
 			: mrender::AppI(_name, _description)
 			, m_time(0)
 			, m_camera(MENGINE_INVALID_HANDLE)
-			, m_cube(MENGINE_INVALID_HANDLE)
 		{
 			mrender::setWindowTitle(mrender::kDefaultWindowHandle, "3D (mengine demo) | Marcus Madland");
 		}
 
 		void init(I32 _argc, const char* const* _argv, U32 _width, U32 _height) override
 		{
+			// Engine
 			mengine::Init mengineInit;
 			mengineInit.graphicsApi = bgfx::RendererType::OpenGL;
 			mengineInit.resolution.width = _width;
 			mengineInit.resolution.height = _height;
 			mengine::init(mengineInit);
+
+			// ImGui
 			mengine::imguiCreate();
 
 #if 0  // COMPILE_ASSETS
 			compileAssets();
 #endif // COMPILE_ASSETS
 
-			// Load asset pack
-			mengine::loadAssetPack("data/assets.pak");
-
-			{	// Entity Camera
-				m_camera = mengine::createEntity();
-
-				mengine::addComponent(m_camera, COMPONENT_CAMERA, mengine::createComponent(
-					new CameraComponent(), sizeof(CameraComponent)));
-			}
-			
-			{	// Entity Cube
-				m_cube = mengine::createEntity();
-
-				mengine::addComponent(m_cube, COMPONENT_MESH, mengine::createComponent(new MeshComponent(
-					mengine::loadGeometry("meshes/cube.bin"),
-					mengine::loadShader("shaders/vs_cube.bin"),
-					mengine::loadShader("shaders/fs_cube.bin")), sizeof(MeshComponent)));
-
-				mengine::addComponent(m_cube, COMPONENT_TRANSFORM, mengine::createComponent(
-					new TransformComponent({ 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f }), sizeof(TransformComponent)));
-			}
-
-			for (I32 x = -5; x < 5; x++)
-			{
-				for (I32 y = -5; y < 5; y++) 
-				{
-					for (I32 z = -5; z < 5; z++) 
-					{
-						const mengine::EntityHandle cube = mengine::createEntity();
-
-						mengine::addComponent(cube, COMPONENT_MESH, mengine::createComponent(new MeshComponent(
-							mengine::loadGeometry("meshes/cube.bin"),
-							mengine::loadShader("shaders/vs_cube.bin"),
-							mengine::loadShader("shaders/fs_cube.bin")), sizeof(MeshComponent)));
-
-						mengine::addComponent(cube, COMPONENT_TRANSFORM, mengine::createComponent(
-							new TransformComponent({ (F32)x, (F32)y , (F32)z }, { 0.3f, 0.3f, 0.3f }), sizeof(TransformComponent)));
-					}
-				}
-			}
+			// Camera
+			m_camera = mengine::createEntity();
+		    mengine::addComponent(m_camera, COMPONENT_CAMERA, mengine::createComponent(new CameraComponent()));
 		}
 
 		int shutdown() override
 		{
+			// Camera
 			mengine::destroy(m_camera);
-			mengine::destroy(m_cube);
 
+			// ImGui
 			mengine::imguiDestroy();
+
+			// Engine
 			mengine::shutdown();
 
 			return 0;
@@ -419,17 +460,25 @@ namespace
 
 		bool update() override
 		{
+			// Time
 			const int64_t frameTime = bx::getHPCounter() - m_time;
 			m_time = bx::getHPCounter();
 			const F64 freq = F64(bx::getHPFrequency());
 			F32 deltaTime = F32(frameTime / freq);
 
+			// Update
 			if (mengine::update(BGFX_DEBUG_TEXT, BGFX_RESET_VSYNC))
 			{
+				mengine::imguiBeginFrame();
+
+				// Systems
 				camera(deltaTime);
 				render(deltaTime);
 				debugRender(deltaTime);
 
+				mengine::imguiEndFrame();
+
+				// Swap buffers
 				bgfx::frame();
 
 				return true;
@@ -439,9 +488,7 @@ namespace
 		}
 
 		I64 m_time;
-
 		mengine::EntityHandle m_camera;
-		mengine::EntityHandle m_cube;
 	};
 
 } // namespace
