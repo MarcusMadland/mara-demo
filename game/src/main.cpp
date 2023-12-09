@@ -8,6 +8,9 @@
 
 #include <imgui/imgui.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stbimage.h"
+
 namespace 
 {
 	// Asset Compiling / Asset Packing
@@ -18,41 +21,93 @@ namespace
 			float x;
 			float y;
 			float z;
+			float u; 
+			float v; 
 		};
 
-		Vertex quadVertices[] =
+		Vertex cubeVertices[] =
 		{
-			{-1.0f,  1.0f,  1.0f, },
-			{ 1.0f,  1.0f,  1.0f, },
-			{-1.0f, -1.0f,  1.0f, },
-			{ 1.0f, -1.0f,  1.0f, },
-			{-1.0f,  1.0f, -1.0f, },
-			{ 1.0f,  1.0f, -1.0f, },
-			{-1.0f, -1.0f, -1.0f, },
-			{ 1.0f, -1.0f, -1.0f, },
+			// Front face
+			{-1.0f, -1.0f, 1.0f, 0.0f, 0.0f}, // 0
+			{ 1.0f, -1.0f, 1.0f, 1.0f, 0.0f}, // 1
+			{ 1.0f,  1.0f, 1.0f, 1.0f, 1.0f}, // 2
+			{-1.0f,  1.0f, 1.0f, 0.0f, 1.0f}, // 3
+
+			// Back face
+			{ 1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 4
+			{-1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 5
+			{-1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 6
+			{ 1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 7
+
+			// Right face
+			{ 1.0f, -1.0f,  1.0f, 0.0f, 0.0f}, // 8
+			{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 9
+			{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 10
+			{ 1.0f,  1.0f,  1.0f, 0.0f, 1.0f}, // 11
+
+			// Left face
+			{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 12
+			{-1.0f, -1.0f,  1.0f, 1.0f, 0.0f}, // 13
+			{-1.0f,  1.0f,  1.0f, 1.0f, 1.0f}, // 14
+			{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 15
+
+			// Top face
+			{-1.0f,  1.0f,  1.0f, 0.0f, 0.0f}, // 16
+			{ 1.0f,  1.0f,  1.0f, 1.0f, 0.0f}, // 17
+			{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 18
+			{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 19
+
+			// Bottom face
+			{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 20
+			{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 21
+			{ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f}, // 22
+			{-1.0f, -1.0f,  1.0f, 0.0f, 1.0f}  // 23
 		};
 
-		const U16 quadTriList[] =
+		const U16 cubeTriList[] =
 		{
-			0, 1, 2, 1, 3, 2, 4, 6, 5,
-			5, 6, 7, 0, 2, 4, 4, 2, 6,
-			1, 5, 3, 5, 7, 3, 0, 4, 1,
-			4, 5, 1, 2, 3, 6, 6, 3, 7,
+			// Front face
+			0, 1, 2,
+			2, 3, 0,
+
+			// Back face
+			4, 5, 6,
+			6, 7, 4,
+
+			// Right face
+			8, 9, 10,
+			10, 11, 8,
+
+			// Left face
+			12, 13, 14,
+			14, 15, 12,
+
+			// Top face
+			16, 17, 18,
+			18, 19, 16,
+
+			// Bottom face
+			20, 21, 22,
+			22, 23, 20
 		};
 
 		bgfx::VertexLayout layout;
 		layout.begin()
 			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+			.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 			.end();
 
-		auto geom = mengine::createGeometry(quadVertices, sizeof(Vertex) * 8, quadTriList, sizeof(U16) * 36, layout,
+		auto geom = mengine::createGeometry(cubeVertices, sizeof(Vertex) * 24, cubeTriList, sizeof(U16) * 36, layout,
 			"meshes/cube.bin");
 
 		auto vert = mengine::createShader(mengine::compileShader(R"(
 			attribute vec3 a_position;
+			attribute vec2 a_texcoord0;
+			varying vec2 v_texcoord0;
 			uniform mat4 u_modelViewProj;
 			void main ()
 			{
+				v_texcoord0 = a_texcoord0;
 				vec4 tmpvar_1;
 				tmpvar_1.w = 1.0;
 				tmpvar_1.xyz = a_position;
@@ -61,17 +116,28 @@ namespace
 		)", mengine::ShaderType::Vertex), "shaders/vs_cube.bin");
 
 		auto frag = mengine::createShader(mengine::compileShader(R"(
+			varying vec2 v_texcoord0;
+			uniform sampler2D s_texColor;
 			void main ()
 			{
-				gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+				vec4 color = texture2D(s_texColor, v_texcoord0);
+				//vec4 color = vec4(v_texcoord0.x, v_texcoord0.y, 0.0, 1.0);
+				gl_FragColor = color;
 			}
 		)", mengine::ShaderType::Fragment), "shaders/fs_cube.bin");
+
+
+		int width, height, channels;
+		unsigned char* data = stbi_load("mc.jpg", &width, &height, &channels, STBI_rgb);
+		auto tex = mengine::createTexture(data, width * height * channels, width, height, false, 
+			bgfx::TextureFormat::RGB8, BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, "textures/mc.bin");
 
 		mengine::packAssets("data/assets.pak");
 
 		mengine::destroy(geom);
 		mengine::destroy(vert);
 		mengine::destroy(frag);
+		mengine::destroy(tex);
 	}
 
 	// Components
@@ -79,18 +145,24 @@ namespace
 	struct MeshComponent : mengine::ComponentI
 	{
 		MeshComponent()
-			: m_gah(BGFX_INVALID_HANDLE)
+			: m_gah(MENGINE_INVALID_HANDLE)
+			, m_tah(MENGINE_INVALID_HANDLE)
 			, m_ph(BGFX_INVALID_HANDLE)
+			, m_tuh(BGFX_INVALID_HANDLE)
 		{}
 
 		virtual ~MeshComponent() override 
 		{
 			mengine::destroy(m_gah);
+			mengine::destroy(m_tah);
 			bgfx::destroy(m_ph);
+			bgfx::destroy(m_tuh);
 		};
 
 		mengine::GeometryAssetHandle m_gah;
+		mengine::TextureAssetHandle m_tah;
 		bgfx::ProgramHandle m_ph;
+		bgfx::UniformHandle m_tuh;
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_TRANSFORM)
@@ -141,7 +213,6 @@ namespace
 	void render(float _dt)
 	{
 		bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030FF, 1.0f, 0);
-		bgfx::touch(0);
 
 		mengine::EntityQuery* qr = mengine::queryEntities(COMPONENT_MESH | COMPONENT_TRANSFORM);
 		for (U32 i = 0; i < qr->m_count; i++)
@@ -172,8 +243,13 @@ namespace
 
 			bgfx::setTransform(mtx);
 			bgfx::setGeometry(mesh->m_gah);
+			bgfx::setTexture(0, mesh->m_tah, mesh->m_tuh);
 
 			bgfx::submit(0, mesh->m_ph);
+		}
+		if (qr->m_count <= 0)
+		{
+			bgfx::touch(0);
 		}
 		bx::free(mrender::getAllocator(), qr);
 	}
@@ -339,6 +415,8 @@ namespace
 
 		if (ImGui::CollapsingHeader("Entity Test", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			static bool loadedAssetPack = false;
+
 			static mengine::EntityHandle s_cube;
 			static mengine::ShaderAssetHandle s_vsah;
 			static mengine::ShaderAssetHandle s_fsah;
@@ -346,32 +424,39 @@ namespace
 			if (ImGui::Button("Load Asset Pack"))
 			{
 				mengine::loadAssetPack("data/assets.pak");
+				loadedAssetPack = true;
 			}
 
 			if (ImGui::Button("Unload Asset Pack"))
 			{
 				mengine::unloadAssetPack("data/assets.pak");
+				loadedAssetPack = false;
 			}
 
-			if (ImGui::Button("Create Cube"))
+			if (loadedAssetPack)
 			{
-				s_vsah = mengine::loadShader("shaders/vs_cube.bin");
-				s_fsah = mengine::loadShader("shaders/fs_cube.bin");
+				if (ImGui::Button("Create Cube"))
+				{
+					s_vsah = mengine::loadShader("shaders/vs_cube.bin");
+					s_fsah = mengine::loadShader("shaders/fs_cube.bin");
 
-				MeshComponent* meshComp = new MeshComponent();
-				meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
-				meshComp->m_ph = bgfx::createProgram(s_vsah, s_fsah);
+					MeshComponent* meshComp = new MeshComponent();
+					meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
+					meshComp->m_tah = mengine::loadTexture("textures/mc.bin");
+					meshComp->m_ph = bgfx::createProgram(s_vsah, s_fsah);
+					meshComp->m_tuh = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
-				s_cube = mengine::createEntity();
-				mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
-				mengine::addComponent(s_cube, COMPONENT_TRANSFORM, mengine::createComponent(new TransformComponent()));
-			}
-			if (ImGui::Button("Destroy Cube"))
-			{
-				mengine::destroy(s_cube);
+					s_cube = mengine::createEntity();
+					mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
+					mengine::addComponent(s_cube, COMPONENT_TRANSFORM, mengine::createComponent(new TransformComponent()));
+				}
+				if (ImGui::Button("Destroy Cube"))
+				{
+					mengine::destroy(s_cube);
 
-				mengine::destroy(s_vsah);
-				mengine::destroy(s_fsah);
+					mengine::destroy(s_vsah);
+					mengine::destroy(s_fsah);
+				}
 			}
 		}
 
@@ -381,6 +466,7 @@ namespace
 			ImGui::Text("Num Component Instances: %u", stats->numComponents);
 			ImGui::Text("Num Geometry Assets: %u", stats->numGeometryAssets);
 			ImGui::Text("Num Shader Assets: %u", stats->numShaderAssets);
+			ImGui::Text("Num Texture Assets: %u", stats->numTextureAssets);
 
 			ImGui::Separator();
 			for (U16 i = 0; i < stats->numEntities; i++)
@@ -404,6 +490,12 @@ namespace
 			for (U16 i = 0; i < stats->numShaderAssets; i++)
 			{
 				ImGui::Text("ShaderAsset[%u] ref: %u", i, stats->shaderRef[i]);
+			}
+			ImGui::Separator();
+
+			for (U16 i = 0; i < stats->numTextureAssets; i++)
+			{
+				ImGui::Text("TextureAsset[%u] ref: %u", i, stats->textureRef[i]);
 			}
 			ImGui::Separator();
 		}
@@ -469,13 +561,12 @@ namespace
 			// Update
 			if (mengine::update(BGFX_DEBUG_TEXT, BGFX_RESET_VSYNC))
 			{
-				mengine::imguiBeginFrame();
-
 				// Systems
 				camera(deltaTime);
 				render(deltaTime);
-				debugRender(deltaTime);
 
+				mengine::imguiBeginFrame();
+				debugRender(deltaTime);
 				mengine::imguiEndFrame();
 
 				// Swap buffers
