@@ -132,12 +132,15 @@ namespace
 		auto tex = mengine::createTexture(data, width * height * channels, width, height, false, 
 			bgfx::TextureFormat::RGB8, BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, "textures/mc.bin");
 
+		auto mat = mengine::createMaterial(vert, frag, "materials/red.bin");
+
 		mengine::packAssets("data/assets.pak");
 
 		mengine::destroy(geom);
 		mengine::destroy(vert);
 		mengine::destroy(frag);
 		mengine::destroy(tex);
+		mengine::destroy(mat);
 	}
 
 	// Components
@@ -146,22 +149,24 @@ namespace
 	{
 		MeshComponent()
 			: m_gah(MENGINE_INVALID_HANDLE)
+			, m_mah(MENGINE_INVALID_HANDLE)
 			, m_tah(MENGINE_INVALID_HANDLE)
-			, m_ph(BGFX_INVALID_HANDLE)
 			, m_tuh(BGFX_INVALID_HANDLE)
 		{}
 
 		virtual ~MeshComponent() override 
 		{
 			mengine::destroy(m_gah);
+			mengine::destroy(m_mah);
 			mengine::destroy(m_tah);
-			bgfx::destroy(m_ph);
 			bgfx::destroy(m_tuh);
 		};
 
 		mengine::GeometryAssetHandle m_gah;
+		mengine::MaterialAssetHandle m_mah;
+
+		// @todo Implement a part of material
 		mengine::TextureAssetHandle m_tah;
-		bgfx::ProgramHandle m_ph;
 		bgfx::UniformHandle m_tuh;
 	};
 
@@ -245,7 +250,7 @@ namespace
 			bgfx::setGeometry(mesh->m_gah);
 			bgfx::setTexture(0, mesh->m_tah, mesh->m_tuh);
 
-			bgfx::submit(0, mesh->m_ph);
+			bgfx::submit(0, mesh->m_mah);
 		}
 		if (qr->m_count <= 0)
 		{
@@ -418,8 +423,6 @@ namespace
 			static bool loadedAssetPack = false;
 
 			static mengine::EntityHandle s_cube;
-			static mengine::ShaderAssetHandle s_vsah;
-			static mengine::ShaderAssetHandle s_fsah;
 
 			if (ImGui::Button("Load Asset Pack"))
 			{
@@ -437,13 +440,10 @@ namespace
 			{
 				if (ImGui::Button("Create Cube"))
 				{
-					s_vsah = mengine::loadShader("shaders/vs_cube.bin");
-					s_fsah = mengine::loadShader("shaders/fs_cube.bin");
-
 					MeshComponent* meshComp = new MeshComponent();
 					meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
 					meshComp->m_tah = mengine::loadTexture("textures/mc.bin");
-					meshComp->m_ph = bgfx::createProgram(s_vsah, s_fsah);
+					meshComp->m_mah = mengine::loadMaterial("materials/red.bin");
 					meshComp->m_tuh = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
 					s_cube = mengine::createEntity();
@@ -453,9 +453,6 @@ namespace
 				if (ImGui::Button("Destroy Cube"))
 				{
 					mengine::destroy(s_cube);
-
-					mengine::destroy(s_vsah);
-					mengine::destroy(s_fsah);
 				}
 			}
 		}
@@ -467,6 +464,7 @@ namespace
 			ImGui::Text("Num Geometry Assets: %u", stats->numGeometryAssets);
 			ImGui::Text("Num Shader Assets: %u", stats->numShaderAssets);
 			ImGui::Text("Num Texture Assets: %u", stats->numTextureAssets);
+			ImGui::Text("Num Material Assets: %u", stats->numMaterialAssets);
 
 			ImGui::Separator();
 			for (U16 i = 0; i < stats->numEntities; i++)
@@ -496,6 +494,12 @@ namespace
 			for (U16 i = 0; i < stats->numTextureAssets; i++)
 			{
 				ImGui::Text("TextureAsset[%u] ref: %u", i, stats->textureRef[i]);
+			}
+			ImGui::Separator();
+		
+			for (U16 i = 0; i < stats->numMaterialAssets; i++)
+			{
+				ImGui::Text("MaterialAsset[%u] ref: %u", i, stats->materialRef[i]);
 			}
 			ImGui::Separator();
 		}
