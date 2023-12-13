@@ -100,35 +100,44 @@ namespace
 		auto geom = mengine::createGeometry(cubeVertices, sizeof(Vertex) * 24, cubeTriList, sizeof(U16) * 36, layout,
 			"meshes/cube.bin");
 
-		auto vert = mengine::createShader(mengine::compileShader(R"(
-			attribute vec3 a_position;
-			attribute vec2 a_texcoord0;
-			varying vec2 v_texcoord0;
-			uniform mat4 u_modelViewProj;
-			void main ()
-			{
-				v_texcoord0 = a_texcoord0;
-				vec4 tmpvar_1;
-				tmpvar_1.w = 1.0;
-				tmpvar_1.xyz = a_position;
-				gl_Position = (u_modelViewProj * tmpvar_1);
-			}
-		)", mengine::ShaderType::Vertex), "shaders/vs_cube.bin");
+		mengine::ShaderAssetHandle vert = MENGINE_INVALID_HANDLE;
+		{
+			int argc = 0;
+			const char* argv[16];
+			argv[argc++] = "-f";
+			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/vs_cube.sc";
+			argv[argc++] = "--varyingdef";
+			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/varying.def.sc";
+			argv[argc++] = "--type";
+			argv[argc++] = "v";
+			argv[argc++] = "--platform";
+			argv[argc++] = "windows";
+			argv[argc++] = "--profile";
+			argv[argc++] = "s_5_0";
+			argv[argc++] = "--O";
+			vert = mengine::createShader(bgfx::compileShader(argc, argv), "shaders/vs_cube.bin");
+		}
 
-		auto frag = mengine::createShader(mengine::compileShader(R"(
-			varying vec2 v_texcoord0;
-			uniform sampler2D s_texColor;
-			void main ()
-			{
-				vec4 color = texture2D(s_texColor, v_texcoord0);
-				//vec4 color = vec4(v_texcoord0.x, v_texcoord0.y, 0.0, 1.0);
-				gl_FragColor = color;
-			}
-		)", mengine::ShaderType::Fragment), "shaders/fs_cube.bin");
-
+		mengine::ShaderAssetHandle frag = MENGINE_INVALID_HANDLE;
+		{
+			int argc = 0;
+			const char* argv[16];
+			argv[argc++] = "-f";
+			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/fs_cube.sc";
+			argv[argc++] = "--varyingdef";
+			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/varying.def.sc";
+			argv[argc++] = "--type";
+			argv[argc++] = "f";
+			argv[argc++] = "--platform";
+			argv[argc++] = "windows";
+			argv[argc++] = "--profile";
+			argv[argc++] = "s_5_0";
+			argv[argc++] = "--O";
+			frag = mengine::createShader(bgfx::compileShader(argc, argv), "shaders/fs_cube.bin");
+		}
 
 		int width, height, channels;
-		unsigned char* data = stbi_load("mc.jpg", &width, &height, &channels, STBI_rgb);
+		unsigned char* data = stbi_load("C:/Users/marcu/Dev/mengine-demo/game/resources/stone.jpg", &width, &height, &channels, STBI_rgb);
 		auto tex = mengine::createTexture(data, width * height * channels, width, height, false, 
 			bgfx::TextureFormat::RGB8, BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, "textures/mc.bin");
 
@@ -523,7 +532,7 @@ namespace
 		{
 			// Engine
 			mengine::Init mengineInit;
-			mengineInit.graphicsApi = bgfx::RendererType::OpenGL;
+			mengineInit.graphicsApi = bgfx::RendererType::Direct3D11;
 			mengineInit.resolution.width = _width;
 			mengineInit.resolution.height = _height;
 			mengine::init(mengineInit);
