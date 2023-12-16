@@ -142,6 +142,8 @@ namespace
 			bgfx::TextureFormat::RGB8, BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, "textures/mc.bin");
 
 		auto mat = mengine::createMaterial(vert, frag, "materials/red.bin");
+		F32 color[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+		mengine::setMaterialUniform(mat, bgfx::UniformType::Vec4, "u_color", &color);
 
 		mengine::packAssets("data/assets.pak");
 
@@ -159,24 +161,16 @@ namespace
 		MeshComponent()
 			: m_gah(MENGINE_INVALID_HANDLE)
 			, m_mah(MENGINE_INVALID_HANDLE)
-			, m_tah(MENGINE_INVALID_HANDLE)
-			, m_tuh(BGFX_INVALID_HANDLE)
 		{}
 
 		virtual ~MeshComponent() override 
 		{
 			mengine::destroy(m_gah);
 			mengine::destroy(m_mah);
-			mengine::destroy(m_tah);
-			bgfx::destroy(m_tuh);
 		};
 
 		mengine::GeometryAssetHandle m_gah;
 		mengine::MaterialAssetHandle m_mah;
-
-		// @todo Implement a part of material
-		mengine::TextureAssetHandle m_tah;
-		bgfx::UniformHandle m_tuh;
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_TRANSFORM)
@@ -257,7 +251,7 @@ namespace
 
 			bgfx::setTransform(mtx);
 			bgfx::setGeometry(mesh->m_gah);
-			bgfx::setTexture(0, mesh->m_tah, mesh->m_tuh);
+			bgfx::setUniforms(mesh->m_mah);
 
 			bgfx::submit(0, mesh->m_mah);
 		}
@@ -451,9 +445,7 @@ namespace
 				{
 					MeshComponent* meshComp = new MeshComponent();
 					meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
-					meshComp->m_tah = mengine::loadTexture("textures/mc.bin");
 					meshComp->m_mah = mengine::loadMaterial("materials/red.bin");
-					meshComp->m_tuh = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 
 					s_cube = mengine::createEntity();
 					mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
@@ -540,7 +532,7 @@ namespace
 			// ImGui
 			mengine::imguiCreate();
 
-#if 0  // COMPILE_ASSETS
+#if 1  // COMPILE_ASSETS
 			compileAssets();
 #endif // COMPILE_ASSETS
 
