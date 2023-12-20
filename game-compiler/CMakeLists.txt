@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 # Project Info
-project(pong VERSION 1.0)
+project(game-compiler VERSION 1.0)
 enable_language(C)
 enable_language(CXX)
 

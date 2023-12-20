@@ -8,171 +8,8 @@
 
 #include <imgui/imgui.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stbimage.h"
-
 namespace 
 {
-	// Asset Compiling / Asset Packing
-	void compileAssets()
-	{
-		struct Vertex
-		{
-			float x;
-			float y;
-			float z;
-			float u; 
-			float v; 
-		};
-
-		Vertex cubeVertices[] =
-		{
-			// Front face
-			{-1.0f, -1.0f, 1.0f, 0.0f, 0.0f}, // 0
-			{ 1.0f, -1.0f, 1.0f, 1.0f, 0.0f}, // 1
-			{ 1.0f,  1.0f, 1.0f, 1.0f, 1.0f}, // 2
-			{-1.0f,  1.0f, 1.0f, 0.0f, 1.0f}, // 3
-
-			// Back face
-			{ 1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 4
-			{-1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 5
-			{-1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 6
-			{ 1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 7
-
-			// Right face
-			{ 1.0f, -1.0f,  1.0f, 0.0f, 0.0f}, // 8
-			{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 9
-			{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 10
-			{ 1.0f,  1.0f,  1.0f, 0.0f, 1.0f}, // 11
-
-			// Left face
-			{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 12
-			{-1.0f, -1.0f,  1.0f, 1.0f, 0.0f}, // 13
-			{-1.0f,  1.0f,  1.0f, 1.0f, 1.0f}, // 14
-			{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 15
-
-			// Top face
-			{-1.0f,  1.0f,  1.0f, 0.0f, 0.0f}, // 16
-			{ 1.0f,  1.0f,  1.0f, 1.0f, 0.0f}, // 17
-			{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f}, // 18
-			{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f}, // 19
-
-			// Bottom face
-			{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f}, // 20
-			{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f}, // 21
-			{ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f}, // 22
-			{-1.0f, -1.0f,  1.0f, 0.0f, 1.0f}  // 23
-		};
-
-		const U16 cubeTriList[] =
-		{
-			// Front face
-			0, 1, 2,
-			2, 3, 0,
-
-			// Back face
-			4, 5, 6,
-			6, 7, 4,
-
-			// Right face
-			8, 9, 10,
-			10, 11, 8,
-
-			// Left face
-			12, 13, 14,
-			14, 15, 12,
-
-			// Top face
-			16, 17, 18,
-			18, 19, 16,
-
-			// Bottom face
-			20, 21, 22,
-			22, 23, 20
-		};
-
-		bgfx::VertexLayout layout;
-		layout.begin()
-			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-			.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-			.end();
-
-
-		{	// CUBE
-			mengine::GeometryCreate data;
-			data.vertices = cubeVertices;
-			data.verticesSize = sizeof(Vertex) * 24;
-			data.indices = cubeTriList;
-			data.indicesSize = sizeof(U16) * 36;
-			data.layout = layout;
-			mengine::createResource(data, "meshes/cube.bin");
-		}
-		
-		{	// VERTEX SHADER
-			mengine::ShaderCreate data;
-			int argc = 0;
-			const char* argv[16];
-			argv[argc++] = "-f";
-			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/vs_cube.sc";
-			argv[argc++] = "--varyingdef";
-			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/varying.def.sc";
-			argv[argc++] = "--type";
-			argv[argc++] = "v";
-			argv[argc++] = "--platform";
-			argv[argc++] = "windows";
-			argv[argc++] = "--profile";
-			argv[argc++] = "s_5_0";
-			argv[argc++] = "--O";
-			data.mem = bgfx::compileShader(argc, argv);
-			mengine::createResource(data, "shaders/vs_cube.bin");
-		}
-
-		{	// FRAGMENT SHADER
-			mengine::ShaderCreate data;
-			int argc = 0;
-			const char* argv[16];
-			argv[argc++] = "-f";
-			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/fs_cube.sc";
-			argv[argc++] = "--varyingdef";
-			argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game/resources/varying.def.sc";
-			argv[argc++] = "--type";
-			argv[argc++] = "f";
-			argv[argc++] = "--platform";
-			argv[argc++] = "windows";
-			argv[argc++] = "--profile";
-			argv[argc++] = "s_5_0";
-			argv[argc++] = "--O";
-			data.mem = bgfx::compileShader(argc, argv);
-			mengine::createResource(data, "shaders/fs_cube.bin");
-		}
-
-		{	// TEXTURE
-			mengine::TextureCreate data;
-			int width, height, channels;
-			unsigned char* mem = stbi_load("C:/Users/marcu/Dev/mengine-demo/game/resources/stone.jpg", &width, &height, &channels, STBI_rgb);
-			data.width = width;
-			data.height = height;
-			data.hasMips = false;
-			data.format = bgfx::TextureFormat::RGB8;
-			data.flags = BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE;
-			data.mem = mem;
-			data.memSize = width * height * channels;
-			mengine::createResource(data, "textures/mc.bin");
-		}
-		
-		{	// MATERIAL
-			mengine::MaterialCreate data;
-			data.vertShaderPath = "shaders/vs_cube.bin";
-			data.fragShaderPath = "shaders/fs_cube.bin";
-			mengine::createResource(data, "materials/red.bin");
-
-			//F32 color[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
-			//mengine::setMaterialUniform(mat, bgfx::UniformType::Vec4, "u_color", &color);
-		}
-
-		mengine::packAssets("data/assets.pak");
-	}
-
 	// Components
 	MENGINE_DEFINE_COMPONENT(COMPONENT_MESH)
 	struct MeshComponent : mengine::ComponentI
@@ -448,13 +285,13 @@ namespace
 
 			if (ImGui::Button("Load Asset Pack"))
 			{
-				mengine::loadAssetPack("data/assets.pak");
+				mengine::loadAssetPack("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
 				loadedAssetPack = true;
 			}
 
 			if (ImGui::Button("Unload Asset Pack"))
 			{
-				mengine::unloadAssetPack("data/assets.pak");
+				mengine::unloadAssetPack("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
 				loadedAssetPack = false;
 			}
 
@@ -555,10 +392,6 @@ namespace
 
 			// ImGui
 			mengine::imguiCreate();
-
-#if 0  // COMPILE_ASSETS
-			compileAssets();
-#endif // COMPILE_ASSETS
 
 			// Camera
 			m_camera = mengine::createEntity();
