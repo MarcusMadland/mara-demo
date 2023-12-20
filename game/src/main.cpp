@@ -97,11 +97,19 @@ namespace
 			.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 			.end();
 
-		auto geom = mengine::createGeometry(cubeVertices, sizeof(Vertex) * 24, cubeTriList, sizeof(U16) * 36, layout,
-			"meshes/cube.bin");
 
-		mengine::ShaderAssetHandle vert = MENGINE_INVALID_HANDLE;
-		{
+		{	// CUBE
+			mengine::GeometryCreate data;
+			data.vertices = cubeVertices;
+			data.verticesSize = sizeof(Vertex) * 24;
+			data.indices = cubeTriList;
+			data.indicesSize = sizeof(U16) * 36;
+			data.layout = layout;
+			mengine::createResource(data, "meshes/cube.bin");
+		}
+		
+		{	// VERTEX SHADER
+			mengine::ShaderCreate data;
 			int argc = 0;
 			const char* argv[16];
 			argv[argc++] = "-f";
@@ -115,11 +123,12 @@ namespace
 			argv[argc++] = "--profile";
 			argv[argc++] = "s_5_0";
 			argv[argc++] = "--O";
-			vert = mengine::createShader(bgfx::compileShader(argc, argv), "shaders/vs_cube.bin");
+			data.mem = bgfx::compileShader(argc, argv);
+			mengine::createResource(data, "shaders/vs_cube.bin");
 		}
 
-		mengine::ShaderAssetHandle frag = MENGINE_INVALID_HANDLE;
-		{
+		{	// FRAGMENT SHADER
+			mengine::ShaderCreate data;
 			int argc = 0;
 			const char* argv[16];
 			argv[argc++] = "-f";
@@ -133,25 +142,35 @@ namespace
 			argv[argc++] = "--profile";
 			argv[argc++] = "s_5_0";
 			argv[argc++] = "--O";
-			frag = mengine::createShader(bgfx::compileShader(argc, argv), "shaders/fs_cube.bin");
+			data.mem = bgfx::compileShader(argc, argv);
+			mengine::createResource(data, "shaders/fs_cube.bin");
 		}
 
-		int width, height, channels;
-		unsigned char* data = stbi_load("C:/Users/marcu/Dev/mengine-demo/game/resources/stone.jpg", &width, &height, &channels, STBI_rgb);
-		auto tex = mengine::createTexture(data, width * height * channels, width, height, false, 
-			bgfx::TextureFormat::RGB8, BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE, "textures/mc.bin");
+		{	// TEXTURE
+			mengine::TextureCreate data;
+			int width, height, channels;
+			unsigned char* mem = stbi_load("C:/Users/marcu/Dev/mengine-demo/game/resources/stone.jpg", &width, &height, &channels, STBI_rgb);
+			data.width = width;
+			data.height = height;
+			data.hasMips = false;
+			data.format = bgfx::TextureFormat::RGB8;
+			data.flags = BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE;
+			data.mem = mem;
+			data.memSize = width * height * channels;
+			mengine::createResource(data, "textures/mc.bin");
+		}
+		
+		{	// MATERIAL
+			mengine::MaterialCreate data;
+			data.vertShaderPath = "shaders/vs_cube.bin";
+			data.fragShaderPath = "shaders/fs_cube.bin";
+			mengine::createResource(data, "materials/red.bin");
 
-		auto mat = mengine::createMaterial(vert, frag, "materials/red.bin");
-		F32 color[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
-		mengine::setMaterialUniform(mat, bgfx::UniformType::Vec4, "u_color", &color);
+			//F32 color[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+			//mengine::setMaterialUniform(mat, bgfx::UniformType::Vec4, "u_color", &color);
+		}
 
 		mengine::packAssets("data/assets.pak");
-
-		mengine::destroy(geom);
-		mengine::destroy(vert);
-		mengine::destroy(frag);
-		mengine::destroy(tex);
-		mengine::destroy(mat);
 	}
 
 	// Components
@@ -169,8 +188,8 @@ namespace
 			mengine::destroy(m_mah);
 		};
 
-		mengine::GeometryAssetHandle m_gah;
-		mengine::MaterialAssetHandle m_mah;
+		mengine::GeometryHandle m_gah;
+		mengine::MaterialHandle m_mah;
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_TRANSFORM)
@@ -444,8 +463,8 @@ namespace
 				if (ImGui::Button("Create Cube"))
 				{
 					MeshComponent* meshComp = new MeshComponent();
-					meshComp->m_gah = mengine::loadGeometry("meshes/cube.bin");
-					meshComp->m_mah = mengine::loadMaterial("materials/red.bin");
+					meshComp->m_gah = mengine::createGeometry(mengine::loadGeometry("meshes/cube.bin"));
+					meshComp->m_mah = mengine::createMaterial(mengine::loadMaterial("materials/red.bin"));
 
 					s_cube = mengine::createEntity();
 					mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
@@ -460,6 +479,11 @@ namespace
 
 		if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			ImGui::Text("Num Asset Packs: %u", stats->numPaks);
+			ImGui::Text("Num Entries: %u", stats->numEntries);
+
+			ImGui::Separator();
+
 			ImGui::Text("Num Entity Instances: %u", stats->numEntities);
 			ImGui::Text("Num Component Instances: %u", stats->numComponents);
 			ImGui::Text("Num Geometry Assets: %u", stats->numGeometryAssets);
@@ -532,7 +556,7 @@ namespace
 			// ImGui
 			mengine::imguiCreate();
 
-#if 1  // COMPILE_ASSETS
+#if 0  // COMPILE_ASSETS
 			compileAssets();
 #endif // COMPILE_ASSETS
 

@@ -9,5 +9,5 @@ void main()
 {
 	vec4 textureSample = texture2D(s_texColor, v_texcoord0);
 	vec4 textureCoord = vec4(v_texcoord0.r, v_texcoord0.g, 0.0, 1.0);
-	gl_FragColor = u_color;
+	gl_FragColor = textureCoord;
 }
