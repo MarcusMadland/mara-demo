@@ -107,7 +107,6 @@ namespace
 
 			bgfx::setTransform(mtx);
 			bgfx::setGeometry(mesh->m_gah);
-			bgfx::setUniforms(mesh->m_mah);
 
 			bgfx::submit(0, mesh->m_mah);
 		}
@@ -300,8 +299,8 @@ namespace
 				if (ImGui::Button("Create Cube"))
 				{
 					MeshComponent* meshComp = new MeshComponent();
-					meshComp->m_gah = mengine::createGeometry(mengine::loadGeometry("meshes/cube.bin"));
-					meshComp->m_mah = mengine::createMaterial(mengine::loadMaterial("materials/red.bin"));
+					meshComp->m_gah = mengine::createGeometry(mengine::loadGeometry("meshes/katana.bin"));
+					meshComp->m_mah = mengine::createMaterial(mengine::loadMaterial("materials/katana.bin"));
 
 					s_cube = mengine::createEntity();
 					mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
@@ -323,11 +322,17 @@ namespace
 
 			ImGui::Text("Num Entity Instances: %u", stats->numEntities);
 			ImGui::Text("Num Component Instances: %u", stats->numComponents);
-			ImGui::Text("Num Geometry Assets: %u", stats->numGeometryAssets);
-			ImGui::Text("Num Shader Assets: %u", stats->numShaderAssets);
-			ImGui::Text("Num Texture Assets: %u", stats->numTextureAssets);
-			ImGui::Text("Num Material Assets: %u", stats->numMaterialAssets);
+			ImGui::Text("Num Resources: %u", stats->numResources);
+			ImGui::Text("Num Geometries: %u", stats->numGeometryAssets);
+			ImGui::Text("Num Shaders: %u", stats->numShaderAssets);
+			ImGui::Text("Num Textures: %u", stats->numTextureAssets);
+			ImGui::Text("Num Materials: %u", stats->numMaterialAssets);
 
+			ImGui::Separator();
+			for (U16 i = 0; i < stats->numResources; i++)
+			{
+				ImGui::Text("Resource[%u] ref: %u", i, stats->resourcesRef[i]);
+			}
 			ImGui::Separator();
 			for (U16 i = 0; i < stats->numEntities; i++)
 			{

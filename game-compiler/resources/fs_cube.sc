@@ -2,12 +2,10 @@ $input v_texcoord0
 
 #include "common.sh"
 
-SAMPLER2D(s_texColor, 0);
-uniform vec4 u_color;
+SAMPLER2D(s_texture, 0);
 
 void main()
 {
-	vec4 textureSample = texture2D(s_texColor, v_texcoord0);
-	vec4 textureCoord = vec4(v_texcoord0.r, v_texcoord0.g, 0.0, 1.0);
-	gl_FragColor = textureCoord;
+	vec4 textureSample = texture2D(s_texture, v_texcoord0);
+	gl_FragColor = textureSample;
 }

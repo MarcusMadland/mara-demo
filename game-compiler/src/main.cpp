@@ -8,6 +8,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stbimage.h"
 
+#include "compiler_fbx.h"
+
+
 namespace 
 {
 	struct Vertex
@@ -82,21 +85,27 @@ namespace
 			mengineInit.resolution.height = _height;
 			mengine::init(mengineInit);
 
-			bgfx::VertexLayout layout;
-			layout.begin()
-				.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-				.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-				.end();
-
+			{	// MODEL
+				mengine::GeometryCreate data = createResourceFromFBX(
+					"C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/katana.fbx", 0,
+					"meshes/katana.bin");
+			}
 
 			{	// CUBE
+				bgfx::VertexLayout layout;
+				layout.begin()
+					.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+					.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+					.end();
+
 				mengine::GeometryCreate data;
 				data.vertices = cubeVertices;
 				data.verticesSize = sizeof(Vertex) * 24;
 				data.indices = cubeTriList;
 				data.indicesSize = sizeof(U16) * 36;
 				data.layout = layout;
-				mengine::createResource(data, "meshes/cube.bin");
+				mengine::createResource(data, 
+					"meshes/cube.bin");
 			}
 
 			{	// VERTEX SHADER
@@ -137,6 +146,8 @@ namespace
 				mengine::createResource(data, "shaders/fs_cube.bin");
 			}
 
+			stbi_set_flip_vertically_on_load(true);
+
 			{	// TEXTURE
 				mengine::TextureCreate data;
 				int width, height, channels;
@@ -151,14 +162,48 @@ namespace
 				mengine::createResource(data, "textures/mc.bin");
 			}
 
+			{	// TEXTURE
+				mengine::TextureCreate data;
+				int width, height, channels;
+				unsigned char* mem = stbi_load("C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/katana.jpg", &width, &height, &channels, STBI_rgb);
+				data.width = width;
+				data.height = height;
+				data.hasMips = false;
+				data.format = bgfx::TextureFormat::RGB8;
+				data.flags = BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE;
+				data.mem = mem;
+				data.memSize = width * height * channels;
+				mengine::createResource(data, "textures/katana.bin");
+			}
+
 			{	// MATERIAL
+				mengine::ResourceHandle texture = mengine::loadTexture("textures/mc.bin");
+
+				mengine::MaterialParameters parameters;
+				parameters.begin()
+					.addTexture("s_texture", texture)
+					.end();
+
 				mengine::MaterialCreate data;
 				data.vertShaderPath = "shaders/vs_cube.bin";
 				data.fragShaderPath = "shaders/fs_cube.bin";
+				data.parameters = parameters;
 				mengine::createResource(data, "materials/red.bin");
+			}
 
-				//F32 color[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
-				//mengine::setMaterialUniform(mat, bgfx::UniformType::Vec4, "u_color", &color);
+			{	// MATERIAL
+				mengine::ResourceHandle texture = mengine::loadTexture("textures/katana.bin");
+
+				mengine::MaterialParameters parameters;
+				parameters.begin()
+					.addTexture("s_texture", texture)
+					.end();
+
+				mengine::MaterialCreate data;
+				data.vertShaderPath = "shaders/vs_cube.bin";
+				data.fragShaderPath = "shaders/fs_cube.bin";
+				data.parameters = parameters;
+				mengine::createResource(data, "materials/katana.bin");
 			}
 
 			mengine::packAssets("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");

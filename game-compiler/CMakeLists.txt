@@ -40,6 +40,8 @@ set(IDENTIFIER "com.marcusmadland.assetmanager")
 file(GLOB_RECURSE SOURCE_FILES RELATIVE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 )
 
