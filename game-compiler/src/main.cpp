@@ -1,72 +1,170 @@
+
+// mengine
 #include <mengine/mengine.h>
-
 #include <mrender/entry.h>
-#include <mrender/input.h>
 
-#include <imgui/imgui.h>
-
+// 3rd-party
 #define STB_IMAGE_IMPLEMENTATION
 #include "stbimage.h"
+#include "ufbx.h"
 
-#include "compiler_fbx.h"
-
+#include <vector>
 
 namespace 
 {
-	struct Vertex
-	{
-		float x;
-		float y;
-		float z;
-		float u;
-		float v;
-	};
+	#define RESOURCE_LOCATION "C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/"
 
-	Vertex cubeVertices[] =
+	void importShader(const bx::FilePath& _shaderPath, const bx::FilePath& _varyingPath, 
+		const bx::FilePath& _outVfp)
 	{
-		{-1.0f, -1.0f, 1.0f, 0.0f, 0.0f}, 
-		{ 1.0f, -1.0f, 1.0f, 1.0f, 0.0f}, 
-		{ 1.0f,  1.0f, 1.0f, 1.0f, 1.0f}, 
-		{-1.0f,  1.0f, 1.0f, 0.0f, 1.0f}, 
-		{ 1.0f, -1.0f, -1.0f, 0.0f, 0.0f},
-		{-1.0f, -1.0f, -1.0f, 1.0f, 0.0f},
-		{-1.0f,  1.0f, -1.0f, 1.0f, 1.0f},
-		{ 1.0f,  1.0f, -1.0f, 0.0f, 1.0f},
-		{ 1.0f, -1.0f,  1.0f, 0.0f, 0.0f},
-		{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f},
-		{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f},
-		{ 1.0f,  1.0f,  1.0f, 0.0f, 1.0f},
-		{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f},
-		{-1.0f, -1.0f,  1.0f, 1.0f, 0.0f},
-		{-1.0f,  1.0f,  1.0f, 1.0f, 1.0f},
-		{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f},
-		{-1.0f,  1.0f,  1.0f, 0.0f, 0.0f},
-		{ 1.0f,  1.0f,  1.0f, 1.0f, 0.0f},
-		{ 1.0f,  1.0f, -1.0f, 1.0f, 1.0f},
-		{-1.0f,  1.0f, -1.0f, 0.0f, 1.0f},
-		{-1.0f, -1.0f, -1.0f, 0.0f, 0.0f},
-		{ 1.0f, -1.0f, -1.0f, 1.0f, 0.0f},
-		{ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f},
-		{-1.0f, -1.0f,  1.0f, 0.0f, 1.0f} 
-	};
+		mengine::ShaderCreate data;
+		int argc = 0;
+		const char* argv[16];
 
-	const U16 cubeTriList[] =
+		argv[argc++] = "-f";
+		argv[argc++] = RESOURCE_LOCATION "vs_cube.sc";
+		argv[argc++] = "--varyingdef";
+		argv[argc++] = RESOURCE_LOCATION "varying.def.sc";
+		argv[argc++] = "--type";
+		argv[argc++] = "v";
+		argv[argc++] = "--platform";
+		argv[argc++] = "windows";
+		argv[argc++] = "--profile";
+		argv[argc++] = "s_5_0";
+		argv[argc++] = "--O";
+		data.mem = bgfx::compileShader(argc, argv);
+
+		mengine::createResource(data,
+			"shaders/vs_cube.bin");
+	}
+
+	void importScene(const bx::FilePath& _fbxPath, const bx::FilePath& _outVfp)
 	{
-		0, 1, 2,
-		2, 3, 0,
-		4, 5, 6,
-		6, 7, 4,
-		8, 9, 10,
-		10, 11, 8,
-		12, 13, 14,
-		14, 15, 12,
-		16, 17, 18,
-		18, 19, 16,
-		20, 21, 22,
-		22, 23, 20
-	};
+		struct MeshVertex
+		{
+			float x;
+			float y;
+			float z;
+			float u;
+			float v;
+			float nx;
+			float ny;
+			float nz;
 
-	// Game
+			bool operator==(const MeshVertex& other) const
+			{
+				return x == other.x && y == other.y && z == other.z &&
+					u == other.u && v == other.v &&
+					nx == other.nx && ny == other.ny && nz == other.nz;
+			}
+		};
+
+		// Load FBX
+		ufbx_load_opts opts;
+		ufbx_error err;
+		ufbx_scene* scene = ufbx_load_file(_fbxPath.getCPtr(), &opts, &err);
+		if (!scene)
+		{
+			BX_TRACE("Failed to load fbx file at %s", _fbxPath.getCPtr())
+			return;
+		}
+
+		// Create a data structure to hold unique vertices and indices.
+		std::vector<MeshVertex> uniqueVertices;
+		std::vector<U16> indices;
+
+		// Handle Mesh
+		U16 meshCount = 0;
+		for (size_t i = 0; i < scene->nodes.count; i++)
+		{
+			ufbx_node* node = scene->nodes.data[i];
+			if (node->is_root) continue;
+
+			// Handle Mesh
+			if (node->mesh)
+			{
+				if (meshCount != _meshIndex)
+				{
+					meshCount++;
+					continue;
+				}
+				meshCount++;
+
+				// Process Faces
+				for (U32 j = 0; j < node->mesh->faces.count; j++)
+				{
+					ufbx_face face = node->mesh->faces.data[j];
+
+					// Triangulate the face
+					std::vector<U32> triIndices;
+					triIndices.resize(node->mesh->max_face_triangles * 3);
+					U32 numTris = ufbx_triangulate_face(triIndices.data(), triIndices.size(), node->mesh, face);
+
+					for (U32 k = 0; k < numTris; k++)
+					{
+						for (U32 l = 0; l < 3; l++)
+						{
+							U16 index = triIndices[k * 3 + l];
+
+							MeshVertex vertex;
+							vertex.x = (F32)node->mesh->vertex_position[index].x;
+							vertex.y = (F32)node->mesh->vertex_position[index].y;
+							vertex.z = (F32)node->mesh->vertex_position[index].z;
+
+							if (node->mesh->vertex_uv.exists)
+							{
+								vertex.u = (F32)node->mesh->vertex_uv.values[node->mesh->vertex_uv.indices[index]].x;
+								vertex.v = (F32)node->mesh->vertex_uv.values[node->mesh->vertex_uv.indices[index]].y;
+							}
+
+							if (node->mesh->vertex_normal.exists)
+							{
+								vertex.nx = (F32)node->mesh->vertex_normal.values[node->mesh->vertex_normal.indices[index]].x;
+								vertex.ny = (F32)node->mesh->vertex_normal.values[node->mesh->vertex_normal.indices[index]].y;
+								vertex.nz = (F32)node->mesh->vertex_normal.values[node->mesh->vertex_normal.indices[index]].z;
+							}
+
+							auto it = std::find(uniqueVertices.begin(), uniqueVertices.end(), vertex);
+							if (it == uniqueVertices.end())
+							{
+								uniqueVertices.push_back(vertex);
+								indices.push_back(static_cast<U16>(uniqueVertices.size() - 1));
+							}
+							else
+							{
+								indices.push_back(static_cast<U16>(it - uniqueVertices.begin()));
+							}
+						}
+					}
+				}
+
+				// Create Asset
+				bgfx::VertexLayout layout;
+				layout.begin()
+					.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+					.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+					.add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
+					.end();
+
+				mengine::GeometryCreate geometry;
+				geometry.vertices = uniqueVertices.data();
+				geometry.verticesSize = uniqueVertices.size() * sizeof(MeshVertex);
+				geometry.indices = indices.data();
+				geometry.indicesSize = indices.size() * sizeof(U16);
+				geometry.layout = layout;
+				mengine::createResource(geometry, _outVfp);
+
+				ufbx_free_scene(scene);
+
+				return;
+			}
+			break;
+		}
+
+		ufbx_free_scene(scene);
+		return;
+	}
+
 	class GameCompiler : public mrender::AppI
 	{
 	public:
@@ -78,135 +176,26 @@ namespace
 
 		void init(I32 _argc, const char* const* _argv, U32 _width, U32 _height) override
 		{
-			// Engine
+			// Init engine
 			mengine::Init mengineInit;
 			mengineInit.graphicsApi = bgfx::RendererType::Direct3D11;
 			mengineInit.resolution.width = _width;
 			mengineInit.resolution.height = _height;
 			mengine::init(mengineInit);
 
-			{	// MODEL
-				mengine::GeometryCreate data = createResourceFromFBX(
-					"C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/katana.fbx", 0,
-					"meshes/katana.bin");
-			}
+			// Import shaders from sc
+			importShader(RESOURCE_LOCATION "vs_cube.sc", RESOURCE_LOCATION "varying.def.sc",
+				"shaders/vs_cube.bin");
 
-			{	// CUBE
-				bgfx::VertexLayout layout;
-				layout.begin()
-					.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-					.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-					.end();
+			importShader(RESOURCE_LOCATION "fs_cube.sc", RESOURCE_LOCATION "varying.def.sc",
+				"shaders/fs_cube.bin");
 
-				mengine::GeometryCreate data;
-				data.vertices = cubeVertices;
-				data.verticesSize = sizeof(Vertex) * 24;
-				data.indices = cubeTriList;
-				data.indicesSize = sizeof(U16) * 36;
-				data.layout = layout;
-				mengine::createResource(data, 
-					"meshes/cube.bin");
-			}
+			// Import scene from fbx
+			importScene(RESOURCE_LOCATION "scene/scene.fbx",
+				"scenes/scene.bin");
 
-			{	// VERTEX SHADER
-				mengine::ShaderCreate data;
-				int argc = 0;
-				const char* argv[16];
-				argv[argc++] = "-f";
-				argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/vs_cube.sc";
-				argv[argc++] = "--varyingdef";
-				argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/varying.def.sc";
-				argv[argc++] = "--type";
-				argv[argc++] = "v";
-				argv[argc++] = "--platform";
-				argv[argc++] = "windows";
-				argv[argc++] = "--profile";
-				argv[argc++] = "s_5_0";
-				argv[argc++] = "--O";
-				data.mem = bgfx::compileShader(argc, argv);
-				mengine::createResource(data, "shaders/vs_cube.bin");
-			}
-
-			{	// FRAGMENT SHADER
-				mengine::ShaderCreate data;
-				int argc = 0;
-				const char* argv[16];
-				argv[argc++] = "-f";
-				argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/fs_cube.sc";
-				argv[argc++] = "--varyingdef";
-				argv[argc++] = "C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/varying.def.sc";
-				argv[argc++] = "--type";
-				argv[argc++] = "f";
-				argv[argc++] = "--platform";
-				argv[argc++] = "windows";
-				argv[argc++] = "--profile";
-				argv[argc++] = "s_5_0";
-				argv[argc++] = "--O";
-				data.mem = bgfx::compileShader(argc, argv);
-				mengine::createResource(data, "shaders/fs_cube.bin");
-			}
-
-			stbi_set_flip_vertically_on_load(true);
-
-			{	// TEXTURE
-				mengine::TextureCreate data;
-				int width, height, channels;
-				unsigned char* mem = stbi_load("C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/stone.jpg", &width, &height, &channels, STBI_rgb);
-				data.width = width;
-				data.height = height;
-				data.hasMips = false;
-				data.format = bgfx::TextureFormat::RGB8;
-				data.flags = BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE;
-				data.mem = mem;
-				data.memSize = width * height * channels;
-				mengine::createResource(data, "textures/mc.bin");
-			}
-
-			{	// TEXTURE
-				mengine::TextureCreate data;
-				int width, height, channels;
-				unsigned char* mem = stbi_load("C:/Users/marcu/Dev/mengine-demo/game-compiler/resources/katana.jpg", &width, &height, &channels, STBI_rgb);
-				data.width = width;
-				data.height = height;
-				data.hasMips = false;
-				data.format = bgfx::TextureFormat::RGB8;
-				data.flags = BGFX_TEXTURE_NONE | BGFX_SAMPLER_NONE;
-				data.mem = mem;
-				data.memSize = width * height * channels;
-				mengine::createResource(data, "textures/katana.bin");
-			}
-
-			{	// MATERIAL
-				mengine::ResourceHandle texture = mengine::loadTexture("textures/mc.bin");
-
-				mengine::MaterialParameters parameters;
-				parameters.begin()
-					.addTexture("s_texture", texture)
-					.end();
-
-				mengine::MaterialCreate data;
-				data.vertShaderPath = "shaders/vs_cube.bin";
-				data.fragShaderPath = "shaders/fs_cube.bin";
-				data.parameters = parameters;
-				mengine::createResource(data, "materials/red.bin");
-			}
-
-			{	// MATERIAL
-				mengine::ResourceHandle texture = mengine::loadTexture("textures/katana.bin");
-
-				mengine::MaterialParameters parameters;
-				parameters.begin()
-					.addTexture("s_texture", texture)
-					.end();
-
-				mengine::MaterialCreate data;
-				data.vertShaderPath = "shaders/vs_cube.bin";
-				data.fragShaderPath = "shaders/fs_cube.bin";
-				data.parameters = parameters;
-				mengine::createResource(data, "materials/katana.bin");
-			}
-
-			mengine::packAssets("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
+			// Package cooked resources into one big file
+			mengine::createPak("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
 		}
 
 		int shutdown() override

@@ -15,18 +15,15 @@ namespace
 	struct MeshComponent : mengine::ComponentI
 	{
 		MeshComponent()
-			: m_gah(MENGINE_INVALID_HANDLE)
-			, m_mah(MENGINE_INVALID_HANDLE)
+			: m_mh(MENGINE_INVALID_HANDLE)
 		{}
 
 		virtual ~MeshComponent() override 
 		{
-			mengine::destroy(m_gah);
-			mengine::destroy(m_mah);
+			mengine::destroy(m_mh);
 		};
 
-		mengine::GeometryHandle m_gah;
-		mengine::MaterialHandle m_mah;
+		mengine::MeshHandle m_mh;
 	};
 
 	MENGINE_DEFINE_COMPONENT(COMPONENT_TRANSFORM)
@@ -102,13 +99,11 @@ namespace
 
 			F32 temp[16];
 			F32 mtx[16];
-			bx::mtxMul(temp, scale, translation);
-			bx::mtxMul(mtx, temp, rotation);
-
+			bx::mtxMul(temp, rotation, scale);  
+			bx::mtxMul(mtx, translation, temp); 
 			bgfx::setTransform(mtx);
-			bgfx::setGeometry(mesh->m_gah);
 
-			bgfx::submit(0, mesh->m_mah);
+			bgfx::submit(0, mesh->m_mh);
 		}
 		if (qr->m_count <= 0)
 		{
@@ -278,55 +273,61 @@ namespace
 
 		if (ImGui::CollapsingHeader("Entity Test", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			static bool loadedAssetPack = false;
-
-			static mengine::EntityHandle s_cube;
-
-			if (ImGui::Button("Load Asset Pack"))
+			static bool loadedPak = false;
+			if (ImGui::Button("Load Pak"))
 			{
-				mengine::loadAssetPack("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
-				loadedAssetPack = true;
+				mengine::loadPak("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
+				loadedPak = true;
+			}
+			if (ImGui::Button("Unload Pak"))
+			{
+				mengine::unloadPak("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
+				loadedPak = false;
 			}
 
-			if (ImGui::Button("Unload Asset Pack"))
+			if (loadedPak)
 			{
-				mengine::unloadAssetPack("C:/Users/marcu/Dev/mengine-demo/game/build/bin/data/assets.pak");
-				loadedAssetPack = false;
-			}
+				static mengine::EntityHandle s_entities[4];
 
-			if (loadedAssetPack)
-			{
-				if (ImGui::Button("Create Cube"))
+				if (ImGui::Button("Create Scene"))
 				{
-					MeshComponent* meshComp = new MeshComponent();
-					meshComp->m_gah = mengine::createGeometry(mengine::loadGeometry("meshes/katana.bin"));
-					meshComp->m_mah = mengine::createMaterial(mengine::loadMaterial("materials/katana.bin"));
+					{
+						MeshComponent* meshComp = new MeshComponent();
+						meshComp->m_mh = mengine::createMesh(mengine::loadMesh("meshes/katana.bin"));
 
-					s_cube = mengine::createEntity();
-					mengine::addComponent(s_cube, COMPONENT_MESH, mengine::createComponent(meshComp));
-					mengine::addComponent(s_cube, COMPONENT_TRANSFORM, mengine::createComponent(new TransformComponent()));
+						TransformComponent* transComp = new TransformComponent();
+						transComp->m_position = { 5.0f, 5.0f, 0.0f };
+						transComp->m_rotation = { 0.0f, 0.0f, 0.0f };
+						transComp->m_scale = { 1.0f, 1.0f, 1.0f };
+
+						s_entities[0] = mengine::createEntity();
+						mengine::addComponent(s_entities[0], COMPONENT_MESH, mengine::createComponent(meshComp));
+						mengine::addComponent(s_entities[0], COMPONENT_TRANSFORM, mengine::createComponent(transComp));
+					}
 				}
-				if (ImGui::Button("Destroy Cube"))
+
+				if (ImGui::Button("Destroy Scene"))
 				{
-					mengine::destroy(s_cube);
+					mengine::destroy(s_entities[0]);
 				}
 			}
 		}
 
 		if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::Text("Num Asset Packs: %u", stats->numPaks);
-			ImGui::Text("Num Entries: %u", stats->numEntries);
+			ImGui::Text("Num Paks: %u", stats->numPaks);
+			ImGui::Text("Num Pak Entries: %u", stats->numPakEntries);
 
 			ImGui::Separator();
 
 			ImGui::Text("Num Entity Instances: %u", stats->numEntities);
 			ImGui::Text("Num Component Instances: %u", stats->numComponents);
 			ImGui::Text("Num Resources: %u", stats->numResources);
-			ImGui::Text("Num Geometries: %u", stats->numGeometryAssets);
-			ImGui::Text("Num Shaders: %u", stats->numShaderAssets);
-			ImGui::Text("Num Textures: %u", stats->numTextureAssets);
-			ImGui::Text("Num Materials: %u", stats->numMaterialAssets);
+			ImGui::Text("Num Geometries: %u", stats->numGeometries);
+			ImGui::Text("Num Shaders: %u", stats->numShaders);
+			ImGui::Text("Num Textures: %u", stats->numTextures);
+			ImGui::Text("Num Materials: %u", stats->numMaterials);
+			ImGui::Text("Num Meshes: %u", stats->numMeshes);
 
 			ImGui::Separator();
 			for (U16 i = 0; i < stats->numResources; i++)
@@ -342,31 +343,37 @@ namespace
 
 			for (U16 i = 0; i < stats->numComponents; i++)
 			{
-				ImGui::Text("Components[%u] ref: %u", i, stats->componentsRef[i]);
+				ImGui::Text("Component[%u] ref: %u", i, stats->componentsRef[i]);
 			}
 			ImGui::Separator();
 
-			for (U16 i = 0; i < stats->numGeometryAssets; i++)
+			for (U16 i = 0; i < stats->numGeometries; i++)
 			{
-				ImGui::Text("GeometryAsset[%u] ref: %u", i, stats->geometryRef[i]);
+				ImGui::Text("Geometry[%u] ref: %u", i, stats->geometryRef[i]);
 			}
 			ImGui::Separator();
 
-			for (U16 i = 0; i < stats->numShaderAssets; i++)
+			for (U16 i = 0; i < stats->numShaders; i++)
 			{
-				ImGui::Text("ShaderAsset[%u] ref: %u", i, stats->shaderRef[i]);
+				ImGui::Text("Shader[%u] ref: %u", i, stats->shaderRef[i]);
 			}
 			ImGui::Separator();
 
-			for (U16 i = 0; i < stats->numTextureAssets; i++)
+			for (U16 i = 0; i < stats->numTextures; i++)
 			{
-				ImGui::Text("TextureAsset[%u] ref: %u", i, stats->textureRef[i]);
+				ImGui::Text("Texture[%u] ref: %u", i, stats->textureRef[i]);
 			}
 			ImGui::Separator();
 		
-			for (U16 i = 0; i < stats->numMaterialAssets; i++)
+			for (U16 i = 0; i < stats->numMaterials; i++)
 			{
-				ImGui::Text("MaterialAsset[%u] ref: %u", i, stats->materialRef[i]);
+				ImGui::Text("Material[%u] ref: %u", i, stats->materialRef[i]);
+			}
+			ImGui::Separator();
+
+			for (U16 i = 0; i < stats->numMeshes; i++)
+			{
+				ImGui::Text("Mesh[%u] ref: %u", i, stats->meshRef[i]);
 			}
 			ImGui::Separator();
 		}
@@ -455,4 +462,4 @@ ENTRY_IMPLEMENT_MAIN(
 	::Game
 	, "Game"
 	, "An example of a game project"
-);
+)
