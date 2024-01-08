@@ -46,9 +46,10 @@ namespace
 	struct CameraComponent : mara::ComponentI
 	{
 		CameraComponent()
-			: m_position({ 0.0f, 2.0f, -5.0f })
-			, m_direction({ 0.0f, 0.0f, 1.0f })
+			: m_position({ 0.0f, 0.0f, 0.0f })
+			, m_forward({ 0.0f, 0.0f, 1.0f })
 			, m_right({ 1.0f, 0.0f, 0.0f })
+			, m_offset({ 0.0f, 0.0f, 0.0f })
 			, m_pitch(0.0f)
 			, m_roll(0.0f)
 			, m_yaw(0.0f)
@@ -56,18 +57,28 @@ namespace
 			, m_sensitivity(1.0f)
 			, m_prevMouseX(0.0f)
 			, m_prevMouseY(0.0f)
+			, m_armLength(5.0f)
+			, m_fov(60.0f)
+			, m_far(5000.0f)
+			, m_near(0.01f)
 			, m_canRotate(false)
+			, m_isFree(false)
 		{}
 
 		virtual ~CameraComponent() override {};
 		
 		base::Vec3 m_position;
-		base::Vec3 m_direction;
+		base::Vec3 m_forward;
 		base::Vec3 m_right;
+		base::Vec3 m_offset;
 		F32 m_pitch, m_roll, m_yaw;
 		F32 m_speed, m_sensitivity;
 		F32 m_prevMouseX, m_prevMouseY;
+		F32 m_armLength;
+		F32 m_fov;
+		F32 m_far, m_near;
 		bool m_canRotate;
+		bool m_isFree;
 	};
 
 	// Systems
@@ -125,11 +136,19 @@ namespace
 	{
 		static bool s_reset = true;
 
-		mara::EntityQuery* qr = mara::queryEntities(COMPONENT_CAMERA);
+		mara::EntityQuery* qr = mara::queryEntities(COMPONENT_CAMERA | COMPONENT_TRANSFORM);
 		for (U32 i = 0; i < qr->m_count; i++)
 		{
 			CameraComponent* camera = (CameraComponent*)mara::getComponentData(qr->m_entities[i], COMPONENT_CAMERA);
+			TransformComponent* transform = (TransformComponent*)mara::getComponentData(qr->m_entities[i], COMPONENT_TRANSFORM);
+
 			const entry::MouseState* mouseState = mara::getMouseState();
+
+			F32 view[16];
+			F32 proj[16];
+
+			const graphics::Stats* renderStats = graphics::getStats();
+			F32 aspectRatio = float(renderStats->width) / float(renderStats->height);
 
 			camera->m_canRotate = !!mouseState->m_buttons[entry::MouseButton::Left];
 			if (camera->m_canRotate && !ImGui::GetIO().WantCaptureMouse)
@@ -142,14 +161,14 @@ namespace
 					s_reset = false;
 				}
 
-				const F32 mouseDeltaX = (F32)(mouseState->m_mx - camera->m_prevMouseX) * 
+				const F32 mouseDeltaX = (F32)(mouseState->m_mx - camera->m_prevMouseX) *
 					(camera->m_sensitivity * _dt);
-				const F32 mouseDeltaY = -(F32)(mouseState->m_my - camera->m_prevMouseY) * 
+				const F32 mouseDeltaY = -(F32)(mouseState->m_my - camera->m_prevMouseY) *
 					(camera->m_sensitivity * _dt);
 				camera->m_prevMouseX = mouseState->m_mx;
 				camera->m_prevMouseY = mouseState->m_my;
 
-				camera->m_right = base::cross(camera->m_direction, { 0.0f, 1.0f, 0.0f });
+				camera->m_right = base::cross(camera->m_forward, { 0.0f, 1.0f, 0.0f });
 				camera->m_right = base::normalize(camera->m_right);
 				camera->m_yaw += mouseDeltaX;
 				camera->m_pitch += mouseDeltaY;
@@ -160,56 +179,70 @@ namespace
 				const F32 cosYaw = base::cos(camera->m_yaw);
 				const F32 sinYaw = base::sin(camera->m_yaw);
 
-				camera->m_direction.x = sinYaw * cosPitch;
-				camera->m_direction.y = sinPitch;
-				camera->m_direction.z = cosYaw * cosPitch;
+				camera->m_forward.x = sinYaw * cosPitch;
+				camera->m_forward.y = sinPitch;
+				camera->m_forward.z = cosYaw * cosPitch;
 
-				camera->m_direction = base::normalize(camera->m_direction);
+				camera->m_forward = base::normalize(camera->m_forward);
 			}
 			else
 			{
 				s_reset = true;
+
+				camera->m_right = base::cross(camera->m_forward, { 0.0f, 1.0f, 0.0f });
+				camera->m_right = base::normalize(camera->m_right);
 			}
 
-			if (inputGetKeyState(entry::Key::KeyA, (U8*)0))
+			if (camera->m_isFree)
 			{
-				camera->m_position = base::add(camera->m_position, 
-					base::mul(camera->m_right, camera->m_speed * _dt));
-			}
-			if (inputGetKeyState(entry::Key::KeyD, (U8*)0))
-			{
-				camera->m_position = base::sub(camera->m_position, 
-					base::mul(camera->m_right, camera->m_speed * _dt));
-			}
-			if (inputGetKeyState(entry::Key::KeyW, (U8*)0))
-			{
-				camera->m_position = base::add(camera->m_position, 
-					base::mul(camera->m_direction, camera->m_speed * _dt));
-			}
-			if (inputGetKeyState(entry::Key::KeyS, (U8*)0))
-			{
-				camera->m_position = base::sub(camera->m_position, 
-					base::mul(camera->m_direction, camera->m_speed * _dt));
-			}
-			if (inputGetKeyState(entry::Key::KeyE, (U8*)0))
-			{
-				camera->m_position.y += camera->m_speed * _dt;
-			}
-			if (inputGetKeyState(entry::Key::KeyQ, (U8*)0))
-			{
-				camera->m_position.y -= camera->m_speed * _dt;
-			}
+				if (inputGetKeyState(entry::Key::KeyA, (U8*)0))
+				{
+					camera->m_position = base::add(camera->m_position,
+						base::mul(camera->m_right, camera->m_speed * _dt));
+				}
+				if (inputGetKeyState(entry::Key::KeyD, (U8*)0))
+				{
+					camera->m_position = base::sub(camera->m_position,
+						base::mul(camera->m_right, camera->m_speed * _dt));
+				}
+				if (inputGetKeyState(entry::Key::KeyW, (U8*)0))
+				{
+					camera->m_position = base::add(camera->m_position,
+						base::mul(camera->m_forward, camera->m_speed * _dt));
+				}
+				if (inputGetKeyState(entry::Key::KeyS, (U8*)0))
+				{
+					camera->m_position = base::sub(camera->m_position,
+						base::mul(camera->m_forward, camera->m_speed * _dt));
+				}
+				if (inputGetKeyState(entry::Key::KeyE, (U8*)0))
+				{
+					camera->m_position.y += camera->m_speed * _dt;
+				}
+				if (inputGetKeyState(entry::Key::KeyQ, (U8*)0))
+				{
+					camera->m_position.y -= camera->m_speed * _dt;
+				}
 
-			const graphics::Stats* renderStats = graphics::getStats();
-			F32 aspectRatio = float(renderStats->width) / float(renderStats->height);
+				base::mtxLookAt(view, camera->m_position, base::add(camera->m_position, camera->m_forward));
+				base::mtxProj(proj, camera->m_fov, aspectRatio, camera->m_near, camera->m_far, graphics::getCaps()->homogeneousDepth);
 
-			F32 view[16];
-			base::mtxLookAt(view, camera->m_position, base::add(camera->m_position, camera->m_direction));
+				graphics::setViewTransform(0, view, proj);
+			}
+			else
+			{
+				base::Vec3 localCharacterPosition = base::add(transform->m_position, base::mul(camera->m_right, camera->m_offset.x));
+				localCharacterPosition = base::add(localCharacterPosition, base::mul({0.0f, 1.0f, 0.0f}, camera->m_offset.y));
+				localCharacterPosition = base::add(localCharacterPosition, base::mul(camera->m_forward, camera->m_offset.z));
 
-			F32 proj[16];
-			base::mtxProj(proj, 60.0f, aspectRatio, 0.01f, 10000.0f, graphics::getCaps()->homogeneousDepth);
+				base::Vec3 localCameraPosition = base::mul(base::neg(camera->m_forward), camera->m_armLength);
+				camera->m_position = base::add(localCharacterPosition, localCameraPosition);
 
-			graphics::setViewTransform(0, view, proj);
+				base::mtxLookAt(view, camera->m_position, localCharacterPosition);
+				base::mtxProj(proj, camera->m_fov, aspectRatio, camera->m_near, camera->m_far, graphics::getCaps()->homogeneousDepth);
+
+				graphics::setViewTransform(0, view, proj);
+			}
 		};
 		base::free(entry::getAllocator(), qr);
 	}
@@ -280,6 +313,18 @@ namespace
 
 		ImGui::Begin("Development");
 
+		static bool freeCamera = false;
+		if (ImGui::Checkbox("Free Camera", &freeCamera))
+		{
+			mara::EntityQuery* qr = mara::queryEntities(COMPONENT_CAMERA | COMPONENT_TRANSFORM);
+			for (U32 i = 0; i < qr->m_count; i++)
+			{
+				CameraComponent* camera = (CameraComponent*)mara::getComponentData(qr->m_entities[i], COMPONENT_CAMERA);
+				camera->m_isFree = freeCamera;
+			}
+			base::free(entry::getAllocator(), qr);
+		}
+
 		if (ImGui::CollapsingHeader("Resources", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text("Num Paks: %u", stats->numPaks);
@@ -302,6 +347,8 @@ namespace
 		{
 			
 		}
+
+		
 		
 		ImGui::End();
 	}
@@ -313,7 +360,6 @@ namespace
 		Game(const char* _name, const char* _description)
 			: entry::AppI(_name, _description)
 			, m_time(0)
-			, m_camera(MARA_INVALID_HANDLE)
 		{
 			entry::setWindowTitle(entry::kDefaultWindowHandle, "Mara | Demo");
 		}
@@ -333,14 +379,6 @@ namespace
 			// Load PAK
 			mara::loadPak("C:/Users/marcu/Dev/mara-demo/demo/build/bin/data/assets.pak");
 
-			// Camera
-			m_camera = mara::createEntity();
-			{
-				CameraComponent* cameraComp = new CameraComponent();
-				cameraComp->m_speed = 10.0f;
-				mara::addComponent(m_camera, COMPONENT_CAMERA, mara::createComponent(cameraComp));
-			}
-
 			// Scene
 			m_scene = mara::createEntity();
 			{
@@ -359,6 +397,11 @@ namespace
 			// Character
 			m_character = mara::createEntity();
 			{
+				CameraComponent* cameraComp = new CameraComponent();
+				cameraComp->m_speed = 10.0f;
+				cameraComp->m_armLength = 4.0f;
+				cameraComp->m_offset = { -0.5f, 1.0f, 0.0f };
+
 				PrefabComponent* prefabComp = new PrefabComponent();
 				prefabComp->m_ph = mara::createPrefab(mara::loadPrefab("characters/character.bin"));
 
@@ -367,7 +410,7 @@ namespace
 				transComp->m_rotation = { 0.0f, 45.0f, 0.0f };
 				transComp->m_scale = { 0.01f, 0.01f, 0.01f };
 
-				
+				mara::addComponent(m_character, COMPONENT_CAMERA, mara::createComponent(cameraComp));
 				mara::addComponent(m_character, COMPONENT_PREFAB, mara::createComponent(prefabComp));
 				mara::addComponent(m_character, COMPONENT_TRANSFORM, mara::createComponent(transComp));
 			}
@@ -375,9 +418,6 @@ namespace
 
 		int shutdown() override
 		{
-			// Camera
-			mara::destroy(m_camera);
-
 			// Scene
 			mara::destroy(m_scene);
 
@@ -426,7 +466,6 @@ namespace
 
 		I64 m_time;
 
-		mara::EntityHandle m_camera;
 		mara::EntityHandle m_scene;
 		mara::EntityHandle m_character;
 	};
