@@ -216,7 +216,11 @@ namespace
 					ufbx_string pathToTexture = mat->textures[j].texture->absolute_filename;
 					ufbx_string virtualPathToTexture = mat->textures[j].texture->relative_filename; // @todo Find more unique path
 
-					mara::ResourceHandle texture = importTexture(pathToTexture.data, virtualPathToTexture.data);
+					base::FilePath texturePath = "textures";
+					texturePath.join(base::FilePath(mat->textures[j].texture->relative_filename.data).getBaseName());
+					texturePath.join(".bin", false);
+
+					mara::ResourceHandle texture = importTexture(pathToTexture.data, texturePath);
 					parameters.addTexture(parameterMara, texture, 0);
 				}
 				for (U32 j = 0; j < mat->props.props.count; j++)
@@ -261,6 +265,7 @@ namespace
 						std::string hashAsString = std::to_string(hash);
 						geometryPath.join(hashAsString.c_str());
 					}
+					geometryPath.join(".bin", false);
 					mara::createResource(geometry, geometryPath);
 				}
 
@@ -272,16 +277,13 @@ namespace
 					material.fragShaderPath = "shaders/fs_cube.bin";
 					material.parameters = parameters;
 
-					{
-						U32 hash = base::hash<base::HashMurmur2A>(&material, sizeof(material));
-						std::string hashAsString = std::to_string(hash);
-						materialPath.join(hashAsString.c_str());
-					}
+					materialPath.join(mat->name.data);
+					materialPath.join(".bin", false);
 					mara::createResource(material, materialPath);
 				}
 
-
 				// Create Mesh Resource
+				base::FilePath meshPath = base::FilePath("meshes");
 				{
 					mara::MeshCreate mesh;
 					mesh.geometryPath = geometryPath;
@@ -309,10 +311,12 @@ namespace
 					mesh.m_transform[14] = -col3.z;
 					mesh.m_transform[15] = 1.0f;
 
-					mara::createResource(mesh, node->name.data);
+					meshPath.join(node->name.data);
+					meshPath.join(".bin", false);
+					mara::createResource(mesh, meshPath);
 				}
 
-				meshes.push_back(node->name.data);
+				meshes.push_back(meshPath.getCPtr());
 				meshId++;
 			}
 		}
