@@ -7,7 +7,6 @@
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_debug.h>
-#include <stdio.h>
 
 namespace 
 {
@@ -676,8 +675,8 @@ namespace
 						U32 num = mara::getResourceInfo(info, true);
 						for (U32 i = 0; i < num; i++)
 						{
-							char formattedString[256];
-							sprintf(formattedString, "%s [%d]", info[i].vfp.getCPtr(), info[i].refCount);
+							char formattedString[2048];
+							base::snprintf(formattedString, sizeof(formattedString), "%s [%d]", info[i].vfp.getCPtr(), info[i].refCount);
 							ImGui::DeveloperMenuText(formattedString);
 						}
 						ImGui::EndDeveloperMenu();
